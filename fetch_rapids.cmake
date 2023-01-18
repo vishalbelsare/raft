@@ -16,4 +16,7 @@ if(NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/RAFT_RAPIDS.cmake)
        ${CMAKE_CURRENT_BINARY_DIR}/RAFT_RAPIDS.cmake
   )
 endif()
+
+set(rapids-cmake-branch fea/export-components)
+set(rapids-cmake-repo robertmaynard/rapids-cmake)
 include(${CMAKE_CURRENT_BINARY_DIR}/RAFT_RAPIDS.cmake)

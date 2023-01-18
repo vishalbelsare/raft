@@ -556,45 +556,6 @@ install(
 )
 
 # ##################################################################################################
-# * export/install optional components  --------------------------------------
-
-include("${rapids-cmake-dir}/export/write_dependencies.cmake")
-
-set(raft_components distance nn distributed)
-set(raft_install_comp raft raft raft)
-if(TARGET raft_distance_lib)
-  list(APPEND raft_components distance-lib)
-  list(APPEND raft_install_comp distance)
-endif()
-if(TARGET raft_nn_lib)
-  list(APPEND raft_components nn-lib)
-  list(APPEND raft_install_comp nn)
-endif()
-
-foreach(comp install_comp IN ZIP_LISTS raft_components raft_install_comp)
-  install(
-    EXPORT raft-${comp}-exports
-    FILE raft-${comp}-targets.cmake
-    NAMESPACE raft::
-    DESTINATION "${lib_dir}/cmake/raft"
-    COMPONENT ${install_comp}
-  )
-  export(
-    EXPORT raft-${comp}-exports
-    FILE ${RAFT_BINARY_DIR}/raft-${comp}-targets.cmake
-    NAMESPACE raft::
-  )
-  rapids_export_write_dependencies(
-    BUILD raft-${comp}-exports "${PROJECT_BINARY_DIR}/raft-${comp}-dependencies.cmake"
-  )
-  rapids_export_write_dependencies(
-    INSTALL raft-${comp}-exports
-    "${PROJECT_BINARY_DIR}/rapids-cmake/raft/export/${install_comp}/raft-${comp}-dependencies.cmake"
-  )
-
-endforeach()
-
-# ##################################################################################################
 # * install export -----------------------------------------------------------
 set(doc_string
     [=[
@@ -651,17 +612,34 @@ endif()
 ]=]
 )
 
-# Use `rapids_export` for 22.04 as it will have COMPONENT support
-include(cmake/modules/raft_export.cmake)
-raft_export(
-  INSTALL raft COMPONENTS nn distance distributed EXPORT_SET raft-exports GLOBAL_TARGETS raft nn
+set(raft_components distance nn distributed)
+set(raft_export_sets raft-distance-exports raft-nn-exports raft-distributed-exports)
+if(TARGET raft_distance_lib)
+  list(APPEND raft_components distance)
+  list(APPEND raft_export_sets raft-distance-lib-exports)
+endif()
+if(TARGET raft_nn_lib)
+  list(APPEND raft_components nn)
+  list(APPEND raft_export_sets raft-nn-lib-exports)
+endif()
+
+rapids_export(
+  INSTALL raft
+  EXPORT_SET raft-exports
+  COMPONENTS ${raft_components}
+  COMPONENTS_EXPORT_SET ${raft_export_sets}
+  GLOBAL_TARGETS raft nn
   distance distributed NAMESPACE raft:: DOCUMENTATION doc_string FINAL_CODE_BLOCK code_string
 )
 
 # ##################################################################################################
 # * build export -------------------------------------------------------------
-raft_export(
-  BUILD raft EXPORT_SET raft-exports COMPONENTS nn distance distributed GLOBAL_TARGETS raft
+rapids_export(
+  BUILD raft
+  EXPORT_SET raft-exports
+  COMPONENTS ${raft_components}
+  COMPONENTS_EXPORT_SET ${raft_export_sets}
+  GLOBAL_TARGETS raft
   distance distributed nn DOCUMENTATION doc_string NAMESPACE raft:: FINAL_CODE_BLOCK code_string
 )
 
