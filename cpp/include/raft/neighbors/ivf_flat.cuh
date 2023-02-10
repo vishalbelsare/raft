@@ -18,6 +18,7 @@
 
 #include <raft/neighbors/ivf_flat_types.hpp>
 #include <raft/spatial/knn/detail/ivf_flat_build.cuh>
+#include <raft/spatial/knn/detail/ivf_flat_reconstruct.cuh>
 #include <raft/spatial/knn/detail/ivf_flat_search.cuh>
 
 #include <raft/core/device_resources.hpp>
@@ -428,6 +429,20 @@ void search(raft::device_resources const& handle,
                 neighbors.data_handle(),
                 distances.data_handle(),
                 nullptr);
+}
+
+template <typename T, typename IdxT>
+void reconstruct_batch(raft::device_resources const& handle,
+                       const index<T, IdxT>& index,
+                       const device_mdspan<const IdxT, extent_1d<IdxT>, row_major>& vector_ids,
+                       const device_mdspan<T, extent_2d<IdxT>, row_major>& vector_out)
+{
+  RAFT_EXPECTS(vector_ids.extent(0) == vector_out.extent(0),
+               "row index inputs and vectors ouputs should have the same length");
+  RAFT_EXPECTS(vector_out.extent(1) == index.dim(),
+               "vectors ouputs should have the right dimension");
+  return raft::spatial::knn::ivf_flat::detail::reconstruct_batch(
+    handle, index, vector_ids, vector_out);
 }
 
 /** @} */
