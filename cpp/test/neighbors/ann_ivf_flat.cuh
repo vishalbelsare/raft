@@ -254,6 +254,47 @@ class AnnIVFFlatTest : public ::testing::TestWithParam<AnnIvfFlatInputs<IdxT>> {
                                   0.001,
                                   min_recall));
     }
+
+    {
+      // new interface
+      raft::spatial::knn::ivf_flat::index_params index_params;
+      raft::spatial::knn::ivf_flat::search_params search_params;
+      index_params.n_lists   = ps.nlist;
+      index_params.metric    = ps.metric;
+      search_params.n_probes = ps.nprobe;
+
+      index_params.add_data_on_build        = true;
+      index_params.kmeans_trainset_fraction = 0.5;
+
+      auto database_view = raft::make_device_matrix_view<const DataT, IdxT>(
+        (const DataT*)database.data(), ps.num_db_vecs, ps.dim);
+
+      auto index = ivf_flat::build(handle_, database_view, index_params);
+
+      IdxT n_reconstruction = 50;
+      rmm::device_uvector<IdxT> vector_ids_v(n_reconstruction, stream_);
+      thrust::sequence(handle_.get_thrust_policy(),
+                       thrust::device_pointer_cast(vector_ids_v.data()),
+                       thrust::device_pointer_cast(vector_ids_v.data() + n_reconstruction));
+      handle_.sync_stream(stream_);
+
+      auto vector_ids =
+        raft::make_device_vector_view<const IdxT, IdxT>(vector_ids_v.data(), n_reconstruction);
+      auto vector_out =
+        raft::make_device_matrix<DataT, IdxT, row_major>(handle_, n_reconstruction, ps.dim);
+
+      ivf_flat::reconstruct_batch(handle_, index, vector_ids, vector_out.view());
+
+      handle_.sync_stream(stream_);
+      print_vector("vector_ids", vector_ids.data_handle(), n_reconstruction, std::cout);
+      print_vector("vector_out", vector_out.data_handle(), n_reconstruction * ps.dim, std::cout);
+
+      ASSERT_TRUE(raft::devArrMatch(database.data(),
+                                    vector_out.view().data_handle(),
+                                    n_reconstruction,
+                                    raft::Compare<DataT>(),
+                                    stream_));
+    }
   }
 
   void SetUp() override

@@ -47,13 +47,13 @@ __global__ void get_data_ptr_kernel(const uint32_t* list_sizes,
                                     uint32_t dim,
                                     uint32_t veclen,
                                     uint32_t n_list,
-                                    T* ptrs_to_data)
+                                    T** ptrs_to_data)
 {
   const IdxT list_id = IdxT(blockDim.x) * IdxT(blockIdx.x) + threadIdx.x;
-  if (list_id > n_list) { return; }
+  if (list_id >= n_list) { return; }
   const IdxT inlist_id     = IdxT(blockDim.y) * IdxT(blockIdx.y) + threadIdx.y;
   const uint32_t list_size = list_sizes[list_id];
-  if (inlist_id > list_size) { return; }
+  if (inlist_id >= list_size) { return; }
 
   const IdxT list_offset  = list_offsets[list_id];
   using interleaved_group = Pow2<kIndexGroupSize>;
@@ -63,22 +63,23 @@ __global__ void get_data_ptr_kernel(const uint32_t* list_sizes,
   const T* ptr = data + (list_offset + group_offset) * dim + ingroup_id;
   ptrs_to_data += list_id * dim;
   IdxT id          = indices[list_offset + inlist_id];
-  ptrs_to_data[id] = ptr;
+  ptrs_to_data[id] = (T*)ptr;
 }
 
 template <typename T, typename IdxT>
 __global__ void reconstruct_batch_kernel(const IdxT* vector_ids,
-                                         const T* ptrs_to_data,
+                                         const T** ptrs_to_data,
                                          uint32_t dim,
                                          uint32_t veclen,
                                          IdxT n_rows,
                                          T* reconstr)
 {
   const IdxT i = IdxT(blockDim.x) * IdxT(blockIdx.x) + threadIdx.x;
-  if (i > n_rows) { return; }
+  if (i >= n_rows) { return; }
 
   const IdxT vector_id = vector_ids[i];
   const T* src         = ptrs_to_data[vector_id];
+  if (!src) { return; }
   reconstr += i * dim;
 
   for (uint32_t l = 0; l < dim; l += veclen) {
@@ -94,29 +95,52 @@ void reconstruct_batch(raft::device_resources const& handle,
                        const device_mdspan<const IdxT, extent_1d<IdxT>, row_major>& vector_ids,
                        const device_mdspan<T, extent_2d<IdxT>, row_major>& vector_out)
 {
-  rmm::device_uvector<T> ptrs_to_data(index.size());
+  rmm::device_uvector<T*> ptrs_to_data(index.size(), handle.get_stream());
+  RAFT_CUDA_TRY(
+    cudaMemsetAsync(ptrs_to_data.data(), 0, ptrs_to_data.size() * sizeof(T*), handle.get_stream()));
 
-  const dim3 block_dim1(64, 64);
-  const dim3 grid_dim1(raft::ceildiv<IdxT>(index.n_lists(), block_dim1.x),
-                       raft::ceildiv<IdxT>(index.size(), block_dim1.y));
-  get_data_ptr_kernel<<<grid_dim1, block_dim1, 0, handle.get_stream()>>>(index.list_sizes(),
-                                                                         index.list_offsets(),
-                                                                         index.data(),
-                                                                         index.indices(),
-                                                                         index.dim(),
-                                                                         index.veclen(),
-                                                                         index.n_lists(),
-                                                                         ptrs_to_data.data());
+  std::cout << "!!! get_data_ptr_kernel !!!" << std::endl;
+
+  const dim3 block_dim1(16, 16);
+  const dim3 grid_dim1(raft::ceildiv<size_t>(index.n_lists(), block_dim1.x),
+                       raft::ceildiv<size_t>(index.size(), block_dim1.y));
+
+  size_t dim1x = raft::ceildiv<size_t>(index.n_lists(), block_dim1.x);
+  size_t dim1y = raft::ceildiv<size_t>(index.size(), block_dim1.y);
+  std::cout << "dim1x: " << dim1x << std::endl;
+  std::cout << "dim1y: " << dim1y << std::endl;
+
+  std::cout << "index.size(): " << index.size() << std::endl;
+
+  get_data_ptr_kernel<<<grid_dim1, block_dim1, 0, handle.get_stream()>>>(
+    index.list_sizes().data_handle(),
+    index.list_offsets().data_handle(),
+    index.data().data_handle(),
+    index.indices().data_handle(),
+    index.dim(),
+    index.veclen(),
+    index.n_lists(),
+    ptrs_to_data.data());
+
+  handle.sync_stream();
+  std::cout << "!!! reconstruct_batch_kernel !!!" << std::endl;
 
   const dim3 block_dim2(256);
-  const dim3 grid_dim2(raft::ceildiv<IdxT>(index.size(), block_dim2.x));
+  const dim3 grid_dim2(raft::ceildiv<size_t>(index.size(), block_dim2.x));
+
+  size_t dim2x = raft::ceildiv<size_t>(index.size(), block_dim2.x);
+  std::cout << "dim2x: " << dim2x << std::endl;
+
   reconstruct_batch_kernel<<<grid_dim2, block_dim2, 0, handle.get_stream()>>>(
     vector_ids.data_handle(),
-    ptrs_to_data.data(),
+    (const T**)ptrs_to_data.data(),
     index.dim(),
     index.veclen(),
     index.size(),
     vector_out.data_handle());
+
+  handle.sync_stream();
+  std::cout << "!!! DONE !!!" << std::endl;
 }
 
 }  // namespace raft::spatial::knn::ivf_flat::detail
