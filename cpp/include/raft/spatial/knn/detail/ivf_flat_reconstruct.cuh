@@ -34,6 +34,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/extrema.h>
+
 #include <cstdint>
 #include <fstream>
 
@@ -60,8 +62,7 @@ __global__ void get_data_ptr_kernel(const uint32_t* list_sizes,
   auto group_offset       = interleaved_group::roundDown(inlist_id);
   auto ingroup_id         = interleaved_group::mod(inlist_id) * veclen;
 
-  const T* ptr = data + (list_offset + group_offset) * dim + ingroup_id;
-  ptrs_to_data += list_id * dim;
+  const T* ptr     = data + (list_offset + group_offset) * dim + ingroup_id;
   IdxT id          = indices[list_offset + inlist_id];
   ptrs_to_data[id] = (T*)ptr;
 }
@@ -80,8 +81,8 @@ __global__ void reconstruct_batch_kernel(const IdxT* vector_ids,
   const IdxT vector_id = vector_ids[i];
   const T* src         = ptrs_to_data[vector_id];
   if (!src) { return; }
-  reconstr += i * dim;
 
+  reconstr += i * dim;
   for (uint32_t l = 0; l < dim; l += veclen) {
     for (uint32_t j = 0; j < veclen; j++) {
       reconstr[l + j] = src[l * kIndexGroupSize + j];
@@ -95,23 +96,52 @@ void reconstruct_batch(raft::device_resources const& handle,
                        const device_mdspan<const IdxT, extent_1d<IdxT>, row_major>& vector_ids,
                        const device_mdspan<T, extent_2d<IdxT>, row_major>& vector_out)
 {
-  rmm::device_uvector<T*> ptrs_to_data(index.size(), handle.get_stream());
+  std::cout << "!!! S0 !!!" << std::endl;
+
+  const IdxT* indices = index.indices().data_handle();
+  thrust::device_ptr<const IdxT> indices_ptr =
+    thrust::device_pointer_cast(index.indices().data_handle());
+  IdxT max_indice = *thrust::max_element(
+    handle.get_thrust_policy(), indices_ptr, indices_ptr + index.indices().extent(0));
+
+  std::cout << "max_indice:" << max_indice << std::endl;
+  std::cout << "!!! S1 !!!" << std::endl;
+
+  rmm::device_uvector<T*> ptrs_to_data(max_indice * 2, handle.get_stream());
   RAFT_CUDA_TRY(
     cudaMemsetAsync(ptrs_to_data.data(), 0, ptrs_to_data.size() * sizeof(T*), handle.get_stream()));
 
-  std::cout << "!!! get_data_ptr_kernel !!!" << std::endl;
+  std::cout << "!!! S2 !!!" << std::endl;
+
+  thrust::device_ptr<const uint32_t> list_sizes_ptr =
+    thrust::device_pointer_cast(index.list_sizes().data_handle());
+  uint32_t max_list_size = *thrust::max_element(
+    handle.get_thrust_policy(), list_sizes_ptr, list_sizes_ptr + index.list_sizes().extent(0));
+
+  std::cout << "!!! S2.5 !!!" << std::endl;
+  handle.sync_stream();
+
+  std::cout << "index.n_lists():" << index.n_lists() << std::endl;
+  std::cout << "index.list_sizes().extent(0):" << index.list_sizes().extent(0) << std::endl;
+  std::cout << "index.list_offsets().extent(0):" << index.list_offsets().extent(0) << std::endl;
+  std::cout << "max_list_size:" << max_list_size << std::endl;
+  std::cout << "index.indices().extent(0):" << index.indices().extent(0) << std::endl;
+  std::cout << "!!! S3 !!!" << std::endl;
+
+  print_vector(
+    "index.indices()", index.indices().data_handle(), index.indices().extent(0), std::cout);
+  print_vector("index.list_offsets()",
+               index.list_offsets().data_handle(),
+               index.list_offsets().extent(0),
+               std::cout);
+  print_vector("index.list_sizes()",
+               index.list_sizes().data_handle(),
+               index.list_sizes().extent(0),
+               std::cout);
 
   const dim3 block_dim1(16, 16);
   const dim3 grid_dim1(raft::ceildiv<size_t>(index.n_lists(), block_dim1.x),
-                       raft::ceildiv<size_t>(index.size(), block_dim1.y));
-
-  size_t dim1x = raft::ceildiv<size_t>(index.n_lists(), block_dim1.x);
-  size_t dim1y = raft::ceildiv<size_t>(index.size(), block_dim1.y);
-  std::cout << "dim1x: " << dim1x << std::endl;
-  std::cout << "dim1y: " << dim1y << std::endl;
-
-  std::cout << "index.size(): " << index.size() << std::endl;
-
+                       raft::ceildiv<size_t>(max_list_size, block_dim1.y));
   get_data_ptr_kernel<<<grid_dim1, block_dim1, 0, handle.get_stream()>>>(
     index.list_sizes().data_handle(),
     index.list_offsets().data_handle(),
@@ -123,14 +153,10 @@ void reconstruct_batch(raft::device_resources const& handle,
     ptrs_to_data.data());
 
   handle.sync_stream();
-  std::cout << "!!! reconstruct_batch_kernel !!!" << std::endl;
+  std::cout << "!!! S4 !!!" << std::endl;
 
   const dim3 block_dim2(256);
   const dim3 grid_dim2(raft::ceildiv<size_t>(index.size(), block_dim2.x));
-
-  size_t dim2x = raft::ceildiv<size_t>(index.size(), block_dim2.x);
-  std::cout << "dim2x: " << dim2x << std::endl;
-
   reconstruct_batch_kernel<<<grid_dim2, block_dim2, 0, handle.get_stream()>>>(
     vector_ids.data_handle(),
     (const T**)ptrs_to_data.data(),
@@ -140,7 +166,7 @@ void reconstruct_batch(raft::device_resources const& handle,
     vector_out.data_handle());
 
   handle.sync_stream();
-  std::cout << "!!! DONE !!!" << std::endl;
+  std::cout << "!!! S5 !!!" << std::endl;
 }
 
 }  // namespace raft::spatial::knn::ivf_flat::detail

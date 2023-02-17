@@ -256,6 +256,8 @@ struct index : ann::index {
   {
     data_    = make_device_mdarray<T>(handle, make_extents<IdxT>(index_size, dim()));
     indices_ = make_device_mdarray<IdxT>(handle, make_extents<IdxT>(index_size));
+    RAFT_CUDA_TRY(
+      cudaMemsetAsync(indices_.data_handle(), 0, index_size * sizeof(IdxT), handle.get_stream()));
 
     switch (metric_) {
       case raft::distance::DistanceType::L2Expanded:
