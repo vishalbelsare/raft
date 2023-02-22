@@ -287,11 +287,12 @@ class AnnIVFFlatTest : public ::testing::TestWithParam<AnnIvfFlatInputs<IdxT>> {
       ivf_flat::reconstruct_batch(handle_, index_2, vectors_ids, vectors_out.view());
       handle_.sync_stream(stream_);
 
-      print_vector("vector_ids", vectors_ids.data_handle(), ps.num_db_vecs, std::cout);
-      print_vector("vector_out", vectors_out.data_handle(), ps.num_db_vecs * ps.dim, std::cout);
+      print_vector("vector_ids", vectors_ids.data_handle(), 20, std::cout);
+      print_vector("vectors_data", vectors_data.data_handle(), 20 * ps.dim, std::cout);
+      print_vector("vector_out", vectors_out.data_handle(), 20 * ps.dim, std::cout);
 
       ASSERT_TRUE(raft::devArrMatch(vectors_data.data_handle(),
-                                    vectors_out.view().data_handle(),
+                                    vectors_out.data_handle(),
                                     ps.num_db_vecs * ps.dim,
                                     raft::Compare<DataT>(),
                                     stream_));

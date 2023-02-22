@@ -96,48 +96,19 @@ void reconstruct_batch(raft::device_resources const& handle,
                        const device_mdspan<const IdxT, extent_1d<IdxT>, row_major>& vector_ids,
                        const device_mdspan<T, extent_2d<IdxT>, row_major>& vector_out)
 {
-  std::cout << "!!! S0 !!!" << std::endl;
-
-  const IdxT* indices = index.indices().data_handle();
   thrust::device_ptr<const IdxT> indices_ptr =
     thrust::device_pointer_cast(index.indices().data_handle());
   IdxT max_indice = *thrust::max_element(
     handle.get_thrust_policy(), indices_ptr, indices_ptr + index.indices().extent(0));
 
-  std::cout << "max_indice:" << max_indice << std::endl;
-  std::cout << "!!! S1 !!!" << std::endl;
-
-  rmm::device_uvector<T*> ptrs_to_data(max_indice * 2, handle.get_stream());
+  rmm::device_uvector<T*> ptrs_to_data(max_indice + 1, handle.get_stream());
   RAFT_CUDA_TRY(
     cudaMemsetAsync(ptrs_to_data.data(), 0, ptrs_to_data.size() * sizeof(T*), handle.get_stream()));
-
-  std::cout << "!!! S2 !!!" << std::endl;
 
   thrust::device_ptr<const uint32_t> list_sizes_ptr =
     thrust::device_pointer_cast(index.list_sizes().data_handle());
   uint32_t max_list_size = *thrust::max_element(
     handle.get_thrust_policy(), list_sizes_ptr, list_sizes_ptr + index.list_sizes().extent(0));
-
-  std::cout << "!!! S2.5 !!!" << std::endl;
-  handle.sync_stream();
-
-  std::cout << "index.n_lists():" << index.n_lists() << std::endl;
-  std::cout << "index.list_sizes().extent(0):" << index.list_sizes().extent(0) << std::endl;
-  std::cout << "index.list_offsets().extent(0):" << index.list_offsets().extent(0) << std::endl;
-  std::cout << "max_list_size:" << max_list_size << std::endl;
-  std::cout << "index.indices().extent(0):" << index.indices().extent(0) << std::endl;
-  std::cout << "!!! S3 !!!" << std::endl;
-
-  print_vector(
-    "index.indices()", index.indices().data_handle(), index.indices().extent(0), std::cout);
-  print_vector("index.list_offsets()",
-               index.list_offsets().data_handle(),
-               index.list_offsets().extent(0),
-               std::cout);
-  print_vector("index.list_sizes()",
-               index.list_sizes().data_handle(),
-               index.list_sizes().extent(0),
-               std::cout);
 
   const dim3 block_dim1(16, 16);
   const dim3 grid_dim1(raft::ceildiv<size_t>(index.n_lists(), block_dim1.x),
@@ -151,22 +122,21 @@ void reconstruct_batch(raft::device_resources const& handle,
     index.veclen(),
     index.n_lists(),
     ptrs_to_data.data());
+  RAFT_CUDA_TRY(cudaPeekAtLastError());
+  RAFT_CUDA_TRY(cudaDeviceSynchronize());
 
-  handle.sync_stream();
-  std::cout << "!!! S4 !!!" << std::endl;
-
+  auto n_reconstruction = vector_ids.extent(0);
   const dim3 block_dim2(256);
-  const dim3 grid_dim2(raft::ceildiv<size_t>(index.size(), block_dim2.x));
+  const dim3 grid_dim2(raft::ceildiv<size_t>(n_reconstruction, block_dim2.x));
   reconstruct_batch_kernel<<<grid_dim2, block_dim2, 0, handle.get_stream()>>>(
     vector_ids.data_handle(),
     (const T**)ptrs_to_data.data(),
     index.dim(),
     index.veclen(),
-    index.size(),
+    n_reconstruction,
     vector_out.data_handle());
-
-  handle.sync_stream();
-  std::cout << "!!! S5 !!!" << std::endl;
+  RAFT_CUDA_TRY(cudaPeekAtLastError());
+  RAFT_CUDA_TRY(cudaDeviceSynchronize());
 }
 
 }  // namespace raft::spatial::knn::ivf_flat::detail
