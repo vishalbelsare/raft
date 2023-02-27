@@ -102,7 +102,7 @@ struct SM_runtime {
 // Computes which compute architecture of a kernel will run
 //
 // Semantics are described above in the documentation of SM_runtime.
-SM_runtime kernel_runtime_arch()
+inline SM_runtime kernel_runtime_arch()
 {
   auto kernel = inner::dummy_runtime_kernel;
   cudaFuncAttributes attributes;

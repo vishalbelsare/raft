@@ -15,10 +15,10 @@
  */
 #pragma once
 
-#include "dispatch_common.cuh"
-#include "kernel_sm60.cuh"
+#include <raft/distance/detail/pairwise_matrix/dispatch_arch.cuh>
+#include <raft/distance/detail/pairwise_matrix/dispatch_common.cuh>
+#include <raft/distance/detail/pairwise_matrix/kernel_sm60.cuh>
 #include <raft/linalg/contractions.cuh>
-#include <raft/util/arch.cuh>
 
 namespace raft::distance::detail {
 
@@ -27,38 +27,28 @@ template <typename OpT,
           typename AccT,
           typename OutT,
           typename FinOpT,
-          typename IdxT        = int,
-          typename SM_compat_t = raft::arch::SM_range<raft::arch::SM_min, raft::arch::SM_future>>
-void distance_matrix_dispatch(
+          typename IdxT,
+          typename SM_compat_t>
+void pairwise_matrix_sm60_dispatch(
   OpT distance_op,
-  IdxT m,
-  IdxT n,
-  IdxT k,
-  const DataT* x,
-  const DataT* y,
-  const DataT* x_norm,
-  const DataT* y_norm,
-  OutT* out,
-  FinOpT fin_op,
-  cudaStream_t stream,
-  bool is_row_major,
-  SM_compat_t sm_compat_range = raft::arch::SM_range(raft::arch::SM_min(), raft::arch::SM_future()))
+  SM_compat_t sm_compat_range,
+  pairwise_matrix_dispatch_params<DataT, AccT, OutT, FinOpT, IdxT> params)
 {
   // Determine leading dimensions and, if column-major, flip order of passing x
   // and y.
   IdxT ldx, ldy, ld_out;
-  if (is_row_major) {
-    ldx = k, ldy = k, ld_out = n;
+  if (params.is_row_major) {
+    ldx = params.k, ldy = params.k, ld_out = params.n;
   } else {
     // Flip x, y, and m, n.
-    std::swap<const DataT*>(x, y);
-    std::swap<const DataT*>(x_norm, y_norm);
-    std::swap(m, n);
-    ldx = m, ldy = n, ld_out = n;
+    std::swap<const DataT*>(params.x, params.y);
+    std::swap<const DataT*>(params.x_norm, params.y_norm);
+    std::swap(params.m, params.n);
+    ldx = params.m, ldy = params.n, ld_out = params.n;
   }
 
-  size_t align_x        = alignment_of_2d_array(x, ldx);
-  size_t align_y        = alignment_of_2d_array(y, ldy);
+  size_t align_x        = alignment_of_2d_array(params.x, ldx);
+  size_t align_y        = alignment_of_2d_array(params.y, ldy);
   size_t byte_alignment = min(align_x, align_y);
 
   // Since alignment is in bytes, it could be smaller than sizeof(DataT).
@@ -70,7 +60,7 @@ void distance_matrix_dispatch(
   // without causing misalignent errors.
   int vec_len_aligned = (byte_alignment % sizeof(DataT) == 0) ? byte_alignment / sizeof(DataT) : 1;
 
-  dispatch_common(is_row_major, vec_len_aligned, [&](auto row_major, auto vec_len_aligned) {
+  dispatch_common(params.is_row_major, vec_len_aligned, [&](auto row_major, auto vec_len_aligned) {
     // row_major and vec_len are std::integral_constants of type bool and int
     // respectively.
 
@@ -87,19 +77,19 @@ void distance_matrix_dispatch(
 
     return pairwise_matrix<Policy, row_major(), DataT, AccT, OutT, IdxT, OpT, FinOpT>(
       distance_op,
-      fin_op,
-      x,
-      y,
-      x_norm,
-      y_norm,
-      m,
-      n,
-      k,
+      params.fin_op,
+      params.x,
+      params.y,
+      params.x_norm,
+      params.y_norm,
+      params.m,
+      params.n,
+      params.k,
       ldx,
       ldy,
       ld_out,
-      out,
-      stream,
+      params.out,
+      params.stream,
       sm_compat_range);
   });
 }

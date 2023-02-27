@@ -21,47 +21,12 @@
 namespace raft::distance::detail {
 
 extern template void
-distance_matrix_dispatch<ops::correlation_distance_op<float, float, int>,
-                         float,
-                         float,
-                         float,
-                         decltype(raft::identity_op()),
-                         int,
-                         raft::arch::SM_range<raft::arch::SM_min, raft::arch::SM_future>>(
-  ops::correlation_distance_op<float, float, int>,
-  int,
-  int,
-  int,
-  const float*,
-  const float*,
-  const float*,
-  const float*,
-  float*,
-  decltype(raft::identity_op()),
-  cudaStream_t,
-  bool,
-  raft::arch::SM_range<raft::arch::SM_min, raft::arch::SM_future>);
-
+pairwise_matrix_arch_dispatch<float, float, float, decltype(raft::identity_op()), int>(
+  ops::correlation_distance_op<float, float, int> distance_op,
+  pairwise_matrix_dispatch_params<float, float, float, decltype(raft::identity_op()), int> params);
 extern template void
-distance_matrix_dispatch<ops::correlation_distance_op<double, double, int>,
-                         double,
-                         double,
-                         double,
-                         decltype(raft::identity_op()),
-                         int,
-                         raft::arch::SM_range<raft::arch::SM_min, raft::arch::SM_future>>(
-  ops::correlation_distance_op<double, double, int>,
-  int,
-  int,
-  int,
-  const double*,
-  const double*,
-  const double*,
-  const double*,
-  double*,
-  decltype(raft::identity_op()),
-  cudaStream_t,
-  bool,
-  raft::arch::SM_range<raft::arch::SM_min, raft::arch::SM_future>);
-
+pairwise_matrix_arch_dispatch<double, double, double, decltype(raft::identity_op()), int>(
+  ops::correlation_distance_op<double, double, int> distance_op,
+  pairwise_matrix_dispatch_params<double, double, double, decltype(raft::identity_op()), int>
+    params);
 }  // namespace raft::distance::detail

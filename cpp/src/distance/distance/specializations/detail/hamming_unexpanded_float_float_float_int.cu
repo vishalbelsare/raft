@@ -15,45 +15,17 @@
  */
 
 #include <raft/core/operators.hpp>
-#include <raft/distance/detail/distance_ops/canberra.cuh>
-#include <raft/distance/detail/distance_ops/correlation.cuh>
-#include <raft/distance/detail/distance_ops/cosine.cuh>
-#include <raft/distance/detail/distance_ops/hamming.cuh>
-#include <raft/distance/detail/distance_ops/hellinger.cuh>
-#include <raft/distance/detail/distance_ops/jensen_shannon.cuh>
-#include <raft/distance/detail/distance_ops/kl_divergence.cuh>
-#include <raft/distance/detail/distance_ops/l1.cuh>
-#include <raft/distance/detail/distance_ops/l2_exp.cuh>
-#include <raft/distance/detail/distance_ops/l2_unexp.cuh>
-#include <raft/distance/detail/distance_ops/l_inf.cuh>
-#include <raft/distance/detail/distance_ops/lp_unexp.cuh>
-#include <raft/distance/detail/distance_ops/russel_rao.cuh>
+#include <raft/distance/detail/distance_ops/all_ops.cuh>
 
+#include <raft/distance/detail/pairwise_matrix/dispatch_arch.cuh>
 #include <raft/distance/detail/pairwise_matrix/dispatch_sm60.cuh>
 #include <raft/util/arch.cuh>
 
 namespace raft::distance::detail {
 
 template void
-distance_matrix_dispatch<ops::hamming_distance_op<float, float, int>,
-                         float,
-                         float,
-                         float,
-                         decltype(raft::identity_op()),
-                         int,
-                         raft::arch::SM_range<raft::arch::SM_min, raft::arch::SM_future>>(
-  ops::hamming_distance_op<float, float, int>,
-  int,
-  int,
-  int,
-  const float*,
-  const float*,
-  const float*,
-  const float*,
-  float*,
-  decltype(raft::identity_op()),
-  cudaStream_t,
-  bool,
-  raft::arch::SM_range<raft::arch::SM_min, raft::arch::SM_future>);
+pairwise_matrix_arch_dispatch<float, float, float, decltype(raft::identity_op()), int>(
+  ops::hamming_distance_op<float, float, int> distance_op,
+  pairwise_matrix_dispatch_params<float, float, float, decltype(raft::identity_op()), int> params);
 
 }  // namespace raft::distance::detail

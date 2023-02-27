@@ -15,44 +15,40 @@
  */
 #pragma once
 
-#include "dispatch_common.cuh"
 #include <raft/distance/detail/pairwise_distance_cutlass_base.cuh>
+#include <raft/distance/detail/pairwise_matrix/dispatch_arch.cuh>
+#include <raft/distance/detail/pairwise_matrix/dispatch_common.cuh>
 
 namespace raft::distance::detail {
 
-template <typename opT,
+template <typename OpT,
           typename DataT,
           typename AccT,
           typename OutT,
           typename FinOpT,
-          typename IdxT = int>
-void distance_matrix_cutlass_dispatch(opT cutlass_op,
-                                      IdxT m,
-                                      IdxT n,
-                                      IdxT k,
-                                      const DataT* x,
-                                      const DataT* y,
-                                      const DataT* x_norm,
-                                      const DataT* y_norm,
-                                      OutT* out,
-                                      FinOpT fin_op,
-                                      cudaStream_t stream,
-                                      bool is_row_major)
+          typename IdxT,
+          typename SM_compat_t>
+void pairwise_matrix_sm80_dispatch(
+  OpT distance_op,
+  SM_compat_t,
+  pairwise_matrix_dispatch_params<DataT, AccT, OutT, FinOpT, IdxT> params)
 {
+  auto cutlass_op = distance_op.get_cutlass_op();
+
   // Determine leading dimensions and possibly flip order of passing x and y if
   // column_major.
   IdxT ldx, ldy, ld_out;
-  if (is_row_major) {
-    ldx = k, ldy = k, ld_out = n;
+  if (params.is_row_major) {
+    ldx = params.k, ldy = params.k, ld_out = params.n;
   } else {
-    std::swap<const DataT*>(x, y);
-    std::swap<const DataT*>(x_norm, y_norm);
-    std::swap(m, n);
-    ldx = m, ldy = n, ld_out = n;
+    // Flip x, y, and m, n.
+    std::swap<const DataT*>(params.x, params.y);
+    std::swap<const DataT*>(params.x_norm, params.y_norm);
+    std::swap(params.m, params.n);
+    ldx = params.m, ldy = params.n, ld_out = params.n;
   }
-
-  size_t align_x        = alignment_of_2d_array(x, ldx);
-  size_t align_y        = alignment_of_2d_array(y, ldy);
+  size_t align_x        = alignment_of_2d_array(params.x, ldx);
+  size_t align_y        = alignment_of_2d_array(params.y, ldy);
   size_t byte_alignment = min(align_x, align_y);
 
   // Since alignment is in bytes, it could be smaller than sizeof(DataT).
@@ -64,15 +60,34 @@ void distance_matrix_cutlass_dispatch(opT cutlass_op,
   // without causing misalignent errors.
   int vec_len_aligned = (byte_alignment % sizeof(DataT) == 0) ? byte_alignment / sizeof(DataT) : 1;
 
-  dispatch_common(is_row_major, vec_len_aligned, [&](auto row_major, auto vec_len_aligned) {
+  dispatch_common(params.is_row_major, vec_len_aligned, [&](auto row_major, auto vec_len_aligned) {
     // row_major and vec_len are std::integral_constants of type bool and int
     // respectively.
 
     // Prevent double, vec_len=4 combination (this is not supported)
     constexpr int vec_len = std::min(vec_len_aligned(), static_cast<int>(16 / sizeof(DataT)));
 
-    cutlassDistanceKernel<DataT, AccT, OutT, IdxT, vec_len, FinOpT, opT, row_major()>(
-      x, y, x_norm, y_norm, m, n, k, ldx, ldy, ld_out, out, fin_op, cutlass_op, stream);
+    cutlassDistanceKernel<DataT,
+                          AccT,
+                          OutT,
+                          IdxT,
+                          vec_len,
+                          FinOpT,
+                          decltype(cutlass_op),
+                          row_major()>(params.x,
+                                       params.y,
+                                       params.x_norm,
+                                       params.y_norm,
+                                       params.m,
+                                       params.n,
+                                       params.k,
+                                       ldx,
+                                       ldy,
+                                       ld_out,
+                                       params.out,
+                                       params.fin_op,
+                                       cutlass_op,
+                                       params.stream);
   });
 }
 

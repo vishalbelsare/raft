@@ -20,6 +20,16 @@
 
 namespace raft::distance::detail::ops {
 
+template <typename DataT, typename AccT>
+struct cosine_cutlass_op {
+  __device__ cosine_cutlass_op() noexcept {}
+  __device__ AccT operator()(DataT& aNorm, const DataT& bNorm, DataT& accVal) const noexcept
+  {
+    return static_cast<AccT>(1.0) - (AccT)(accVal / (aNorm * bNorm));
+  }
+  __device__ AccT operator()(DataT aData) const noexcept { return aData; }
+};
+
 /**
  * @brief the expanded cosine distance matrix calculation
  *
@@ -60,16 +70,7 @@ struct cosine_distance_op {
       }
     }
   }
-};
 
-template <typename DataT, typename AccT>
-struct cosine_cutlass_op {
-  __device__ cosine_cutlass_op() noexcept {}
-  __device__ AccT operator()(DataT& aNorm, const DataT& bNorm, DataT& accVal) const noexcept
-  {
-    return static_cast<AccT>(1.0) - (AccT)(accVal / (aNorm * bNorm));
-  }
-  __device__ AccT operator()(DataT aData) const noexcept { return aData; }
+  cosine_cutlass_op<DataT, AccT> get_cutlass_op() { return cosine_cutlass_op<DataT, AccT>(); }
 };
-
 }  // namespace raft::distance::detail::ops

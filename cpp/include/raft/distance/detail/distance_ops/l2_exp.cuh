@@ -20,6 +20,22 @@
 
 namespace raft::distance::detail::ops {
 
+// Epilogue operator for CUTLASS based kernel
+template <typename DataT, typename AccT>
+struct l2_exp_cutlass_op {
+  bool sqrt;
+
+  __device__ l2_exp_cutlass_op() noexcept : sqrt(false) {}
+  __device__ l2_exp_cutlass_op(bool isSqrt) noexcept : sqrt(isSqrt) {}
+  __device__ AccT operator()(DataT& aNorm, const DataT& bNorm, DataT& accVal) const noexcept
+  {
+    AccT outVal = aNorm + bNorm - DataT(2.0) * accVal;
+    return sqrt ? raft::sqrt(outVal) : outVal;
+  }
+
+  __device__ AccT operator()(DataT aData) const noexcept { return aData; }
+};
+
 /**
  * @brief the expanded euclidean distance matrix calculation
  *
@@ -74,22 +90,8 @@ struct l2_exp_distance_op {
       }
     }
   }
-};
 
-// Epilogue operator for CUTLASS based kernel
-template <typename DataT, typename AccT>
-struct l2_exp_cutlass_op {
-  bool sqrt;
-
-  __device__ l2_exp_cutlass_op() noexcept : sqrt(false) {}
-  __device__ l2_exp_cutlass_op(bool isSqrt) noexcept : sqrt(isSqrt) {}
-  __device__ AccT operator()(DataT& aNorm, const DataT& bNorm, DataT& accVal) const noexcept
-  {
-    AccT outVal = aNorm + bNorm - DataT(2.0) * accVal;
-    return sqrt ? raft::sqrt(outVal) : outVal;
-  }
-
-  __device__ AccT operator()(DataT aData) const noexcept { return aData; }
+  l2_exp_cutlass_op<DataT, AccT> get_cutlass_op() { return l2_exp_cutlass_op<DataT, AccT>(sqrt); }
 };
 
 }  // namespace raft::distance::detail::ops
