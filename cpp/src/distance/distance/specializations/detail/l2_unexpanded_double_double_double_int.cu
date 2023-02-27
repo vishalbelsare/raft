@@ -14,24 +14,46 @@
  * limitations under the License.
  */
 
-#include <raft/distance/detail/distance.cuh>
+#include <raft/core/operators.hpp>
+#include <raft/distance/detail/distance_ops/canberra.cuh>
+#include <raft/distance/detail/distance_ops/correlation.cuh>
+#include <raft/distance/detail/distance_ops/cosine.cuh>
+#include <raft/distance/detail/distance_ops/hamming.cuh>
+#include <raft/distance/detail/distance_ops/hellinger.cuh>
+#include <raft/distance/detail/distance_ops/jensen_shannon.cuh>
+#include <raft/distance/detail/distance_ops/kl_divergence.cuh>
+#include <raft/distance/detail/distance_ops/l1.cuh>
+#include <raft/distance/detail/distance_ops/l2_exp.cuh>
+#include <raft/distance/detail/distance_ops/l2_unexp.cuh>
+#include <raft/distance/detail/distance_ops/l_inf.cuh>
+#include <raft/distance/detail/distance_ops/lp_unexp.cuh>
+#include <raft/distance/detail/distance_ops/russel_rao.cuh>
 
-namespace raft {
-namespace distance {
-namespace detail {
-template void distance<raft::distance::DistanceType::L2Unexpanded, double, double, double, int>(
-  raft::resources const& handle,
-  const double* x,
-  const double* y,
-  double* dist,
-  int m,
-  int n,
-  int k,
-  void* workspace,
-  std::size_t worksize,
-  bool isRowMajor,
-  double metric_arg);
+#include <raft/distance/detail/pairwise_matrix/dispatch_sm60.cuh>
+#include <raft/util/arch.cuh>
 
-}  // namespace detail
-}  // namespace distance
-}  // namespace raft
+namespace raft::distance::detail {
+
+template void
+distance_matrix_dispatch<ops::l2_unexp_distance_op<double, double, int>,
+                         double,
+                         double,
+                         double,
+                         decltype(raft::identity_op()),
+                         int,
+                         raft::arch::SM_range<raft::arch::SM_min, raft::arch::SM_future>>(
+  ops::l2_unexp_distance_op<double, double, int>,
+  int,
+  int,
+  int,
+  const double*,
+  const double*,
+  const double*,
+  const double*,
+  double*,
+  decltype(raft::identity_op()),
+  cudaStream_t,
+  bool,
+  raft::arch::SM_range<raft::arch::SM_min, raft::arch::SM_future>);
+
+}  // namespace raft::distance::detail

@@ -41,7 +41,8 @@
 #include <raft/distance/detail/distance_ops/lp_unexp.cuh>
 #include <raft/distance/detail/distance_ops/russel_rao.cuh>
 
-#include <raft/distance/detail/pairwise_matrix/dispatch.cuh>
+#include <raft/distance/detail/pairwise_matrix/dispatch_sm60.cuh>
+#include <raft/distance/detail/pairwise_matrix/dispatch_sm80.cuh>
 
 #include <raft/distance/distance_types.hpp>
 #include <raft/linalg/gemm.cuh>
@@ -449,7 +450,7 @@ void distance_impl(raft::resources const& handle,
 
   // This op takes some shortcuts when x equals y. So its behavior changes based
   // on this.
-  ops::kl_divergence_op<DataT, AccT, DataT> kl_divergence{is_row_major, x == y};
+  ops::kl_divergence_op<DataT, AccT, IdxT> kl_divergence{is_row_major, x == y};
 
   if (x != y) {
     raft::linalg::unaryOp<DataT, decltype(unaryOp_lambda), IdxT>(
