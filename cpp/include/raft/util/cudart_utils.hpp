@@ -25,6 +25,7 @@
 #pragma once
 
 #include <raft/core/error.hpp>
+#include <raft/util/cuda_rt_essentials.hpp>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/managed_memory_resource.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
@@ -49,6 +50,38 @@ namespace raft {
 struct cuda_error : public raft::exception {
   explicit cuda_error(char const* const message) : raft::exception(message) {}
   explicit cuda_error(std::string const& message) : raft::exception(message) {}
+  explicit cuda_error(cudaError_t status, const char* call_site)
+    : raft::exception(message_from_cuda_error(status, call_site))
+  {
+  }
+  explicit cuda_error(raft_cuda_error_t status, const char*)
+    : raft::exception(message_from_raft_error(status))
+  {
+  }
+
+  std::string message_from_cuda_error(cudaError_t status, const char* call_site)
+  {
+    std::string msg{};
+    SET_ERROR_MSG(msg,
+                  "CUDA error encountered at: ",
+                  "call='%s', Reason=%s:%s",
+                  call_site,
+                  cudaGetErrorName(status),
+                  cudaGetErrorString(status));
+    return msg;
+  }
+
+  std::string message_from_raft_error(raft_cuda_error_t status)
+  {
+    std::string msg{};
+    SET_ERROR_MSG(msg,
+                  "CUDA error encountered at: ",
+                  "call='%s', Reason=%s:%s",
+                  status.call_site,
+                  status.cuda_error_name,
+                  status.cuda_error_string);
+    return msg;
+  }
 };
 
 }  // namespace raft
@@ -61,20 +94,14 @@ struct cuda_error : public raft::exception {
  * exception detailing the CUDA error that occurred
  *
  */
-#define RAFT_CUDA_TRY(call)                        \
-  do {                                             \
-    cudaError_t const status = call;               \
-    if (status != cudaSuccess) {                   \
-      cudaGetLastError();                          \
-      std::string msg{};                           \
-      SET_ERROR_MSG(msg,                           \
-                    "CUDA error encountered at: ", \
-                    "call='%s', Reason=%s:%s",     \
-                    #call,                         \
-                    cudaGetErrorName(status),      \
-                    cudaGetErrorString(status));   \
-      throw raft::cuda_error(msg);                 \
-    }                                              \
+#define RAFT_CUDA_TRY(call)                                           \
+  do {                                                                \
+    auto const status             = call;                             \
+    cudaError_t const cuda_status = static_cast<cudaError_t>(status); \
+    if (cuda_status != cudaSuccess) {                                 \
+      cudaGetLastError();                                             \
+      throw raft::cuda_error(status, #call);                          \
+    }                                                                 \
   } while (0)
 
 // FIXME: Remove after consumers rename

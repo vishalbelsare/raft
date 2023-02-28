@@ -21,12 +21,13 @@ start_template = """/*
 #pragma once
 
 #include <raft/distance/detail/distance.cuh>
+#include <raft/util/cuda_rt_essentials.hpp>
 
 namespace raft::distance::detail {
 
 """
 
-extern_template = """extern template void
+extern_template = """extern template raft::raft_cuda_error_t
 pairwise_matrix_arch_dispatch<DataT, AccT, OutT, decltype(raft::identity_op()), IdxT>(
   OpT distance_op,
   pairwise_matrix_dispatch_params<DataT, AccT, OutT, decltype(raft::identity_op()), IdxT> params);

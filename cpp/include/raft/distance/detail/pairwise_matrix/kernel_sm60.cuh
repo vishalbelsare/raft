@@ -115,21 +115,21 @@ template <typename Policy,
           typename OpT,
           typename FinOpT,
           typename SM_compat_t>
-void pairwise_matrix(OpT distance_op,
-                     FinOpT fin_op,
-                     const DataT* x,
-                     const DataT* y,
-                     const DataT* _xn,
-                     const DataT* _yn,
-                     IdxT m,
-                     IdxT n,
-                     IdxT k,
-                     IdxT lda,
-                     IdxT ldb,
-                     IdxT ldd,
-                     OutT* dOutput,
-                     cudaStream_t stream,
-                     SM_compat_t sm_compat_range)
+raft::raft_cuda_error_t pairwise_matrix(OpT distance_op,
+                                        FinOpT fin_op,
+                                        const DataT* x,
+                                        const DataT* y,
+                                        const DataT* _xn,
+                                        const DataT* _yn,
+                                        IdxT m,
+                                        IdxT n,
+                                        IdxT k,
+                                        IdxT lda,
+                                        IdxT ldb,
+                                        IdxT ldd,
+                                        OutT* dOutput,
+                                        cudaStream_t stream,
+                                        SM_compat_t sm_compat_range)
 {
   dim3 blk(Policy::Nthreads);
   // Use .template to disambiguate (See:
@@ -145,11 +145,14 @@ void pairwise_matrix(OpT distance_op,
                                        OpT,
                                        FinOpT,
                                        decltype(sm_compat_range)>;
-  dim3 grid   = launchConfigGenerator<Policy>(m, n, smem_size, kernel);
+  dim3 grid;
+  RAFT_CUDA_RETURN_ON_ERROR(launchConfigGenerator<Policy>(m, n, smem_size, kernel, grid));
 
   kernel<<<grid, blk, smem_size, stream>>>(
     x, y, _xn, _yn, m, n, k, lda, ldb, ldd, dOutput, distance_op, fin_op, sm_compat_range);
-  RAFT_CUDA_TRY(cudaGetLastError());
+  RAFT_CUDA_RETURN_ON_ERROR(cudaGetLastError());
+
+  return raft::raft_success();
 }
 
 };  // namespace raft::distance::detail

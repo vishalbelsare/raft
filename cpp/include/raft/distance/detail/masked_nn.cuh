@@ -296,7 +296,8 @@ void masked_l2_nn_impl(raft::device_resources const& handle,
                                     decltype(fin_op)>;
   constexpr size_t smemSize = P::SmemSize + ((P::Mblk + P::Nblk) * sizeof(DataT));
   dim3 block(P::Nthreads);
-  dim3 grid = launchConfigGenerator<P>(m, n, smemSize, kernel);
+  dim3 grid;
+  RAFT_CUDA_TRY(launchConfigGenerator<P>(m, n, smemSize, kernel, grid));
 
   kernel<<<grid, block, smemSize, stream>>>(out,
                                             x,

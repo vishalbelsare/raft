@@ -16,6 +16,7 @@
 
 #include <raft/core/operators.hpp>
 #include <raft/distance/detail/distance_ops/all_ops.cuh>
+#include <raft/util/cuda_rt_essentials.hpp>
 
 #include <raft/distance/detail/pairwise_matrix/dispatch_arch.cuh>
 #include <raft/distance/detail/pairwise_matrix/dispatch_sm60.cuh>
@@ -23,7 +24,7 @@
 
 namespace raft::distance::detail {
 
-template void
+template raft::raft_cuda_error_t
 pairwise_matrix_arch_dispatch<double, double, double, decltype(raft::identity_op()), int>(
   ops::lp_unexp_distance_op<double, double, int> distance_op,
   pairwise_matrix_dispatch_params<double, double, double, decltype(raft::identity_op()), int>

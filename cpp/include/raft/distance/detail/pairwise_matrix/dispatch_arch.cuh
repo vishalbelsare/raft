@@ -32,6 +32,7 @@
 
 #include <raft/distance/detail/distance_ops/all_ops.cuh>
 #include <raft/util/arch.cuh>
+#include <raft/util/cuda_rt_essentials.hpp>
 // NOTE: to minimize compile times, we do not include dispatch_sm60.cuh and
 // dispatch_sm80.cuh. Especially dispatch_sm80.cuh can slow down compile times
 // (due to CUTLASS). Therefore, it is the caller's responsibility to include the
@@ -81,11 +82,11 @@ template <typename OpT,
           typename OutT,
           typename FinOpT,
           typename IdxT>
-void pairwise_matrix_dispatch_any_to_sm60(
+raft::raft_cuda_error_t pairwise_matrix_dispatch_any_to_sm60(
   OpT distance_op, pairwise_matrix_dispatch_params<DataT, AccT, OutT, FinOpT, IdxT> params)
 {
   auto any_arch = raft::arch::SM_range(raft::arch::SM_min(), raft::arch::SM_future());
-  pairwise_matrix_sm60_dispatch(distance_op, any_arch, params);
+  return pairwise_matrix_sm60_dispatch(distance_op, any_arch, params);
 }
 
 template <typename OpT,
@@ -94,7 +95,7 @@ template <typename OpT,
           typename OutT,
           typename FinOpT,
           typename IdxT>
-void pairwise_matrix_dispatch_split_at_sm80(
+raft::raft_cuda_error_t pairwise_matrix_dispatch_split_at_sm80(
   OpT distance_op, pairwise_matrix_dispatch_params<DataT, AccT, OutT, FinOpT, IdxT> params)
 {
   // On CUDA 12:
@@ -108,7 +109,7 @@ void pairwise_matrix_dispatch_split_at_sm80(
     // Always execute legacy kernels on CUDA 12
     auto any_arch = raft::arch::SM_range(raft::arch::SM_min(), raft::arch::SM_future());
 
-    pairwise_matrix_sm60_dispatch(distance_op, any_arch, params);
+    return pairwise_matrix_sm60_dispatch(distance_op, any_arch, params);
   } else {
     auto runtime_arch  = raft::arch::kernel_runtime_arch();
     auto cutlass_range = raft::arch::SM_range(raft::arch::SM_80(), raft::arch::SM_future());
@@ -116,117 +117,117 @@ void pairwise_matrix_dispatch_split_at_sm80(
 
     if (cutlass_range.contains(runtime_arch)) {
       // If device is SM_80 or later, use CUTLASS-based kernel.
-      pairwise_matrix_sm80_dispatch(distance_op, cutlass_range, params);
+      return pairwise_matrix_sm80_dispatch(distance_op, cutlass_range, params);
     } else {
       // Else use "legacy" L2. Compile *only* for architectures in the legacy
       // range. For newer architectures, compile empty kernels.
-      pairwise_matrix_sm60_dispatch(distance_op, legacy_range, params);
+      return pairwise_matrix_sm60_dispatch(distance_op, legacy_range, params);
     }
   }
 }
 
 template <typename DataT, typename AccT, typename OutT, typename FinOpT, typename IdxT>
-void pairwise_matrix_arch_dispatch(
+raft::raft_cuda_error_t pairwise_matrix_arch_dispatch(
   ops::canberra_distance_op<DataT, AccT, IdxT> distance_op,
   pairwise_matrix_dispatch_params<DataT, AccT, OutT, FinOpT, IdxT> params)
 {
-  pairwise_matrix_dispatch_any_to_sm60(distance_op, params);
+  return pairwise_matrix_dispatch_any_to_sm60(distance_op, params);
 }
 
 template <typename DataT, typename AccT, typename OutT, typename FinOpT, typename IdxT>
-void pairwise_matrix_arch_dispatch(
+raft::raft_cuda_error_t pairwise_matrix_arch_dispatch(
   ops::correlation_distance_op<DataT, AccT, IdxT> distance_op,
   pairwise_matrix_dispatch_params<DataT, AccT, OutT, FinOpT, IdxT> params)
 {
-  pairwise_matrix_dispatch_any_to_sm60(distance_op, params);
+  return pairwise_matrix_dispatch_any_to_sm60(distance_op, params);
 }
 
 template <typename DataT, typename AccT, typename OutT, typename FinOpT, typename IdxT>
-void pairwise_matrix_arch_dispatch(
+raft::raft_cuda_error_t pairwise_matrix_arch_dispatch(
   ops::cosine_distance_op<DataT, AccT, IdxT> distance_op,
   pairwise_matrix_dispatch_params<DataT, AccT, OutT, FinOpT, IdxT> params)
 {
-  pairwise_matrix_dispatch_split_at_sm80(distance_op, params);
+  return pairwise_matrix_dispatch_split_at_sm80(distance_op, params);
 }
 
 template <typename DataT, typename AccT, typename OutT, typename FinOpT, typename IdxT>
-void pairwise_matrix_arch_dispatch(
+raft::raft_cuda_error_t pairwise_matrix_arch_dispatch(
   ops::hamming_distance_op<DataT, AccT, IdxT> distance_op,
   pairwise_matrix_dispatch_params<DataT, AccT, OutT, FinOpT, IdxT> params)
 {
-  pairwise_matrix_dispatch_any_to_sm60(distance_op, params);
+  return pairwise_matrix_dispatch_any_to_sm60(distance_op, params);
 }
 
 template <typename DataT, typename AccT, typename OutT, typename FinOpT, typename IdxT>
-void pairwise_matrix_arch_dispatch(
+raft::raft_cuda_error_t pairwise_matrix_arch_dispatch(
   ops::hellinger_distance_op<DataT, AccT, IdxT> distance_op,
   pairwise_matrix_dispatch_params<DataT, AccT, OutT, FinOpT, IdxT> params)
 {
-  pairwise_matrix_dispatch_any_to_sm60(distance_op, params);
+  return pairwise_matrix_dispatch_any_to_sm60(distance_op, params);
 }
 
 template <typename DataT, typename AccT, typename OutT, typename FinOpT, typename IdxT>
-void pairwise_matrix_arch_dispatch(
+raft::raft_cuda_error_t pairwise_matrix_arch_dispatch(
   ops::jensen_shannon_distance_op<DataT, AccT, IdxT> distance_op,
   pairwise_matrix_dispatch_params<DataT, AccT, OutT, FinOpT, IdxT> params)
 {
-  pairwise_matrix_dispatch_any_to_sm60(distance_op, params);
+  return pairwise_matrix_dispatch_any_to_sm60(distance_op, params);
 }
 
 template <typename DataT, typename AccT, typename OutT, typename FinOpT, typename IdxT>
-void pairwise_matrix_arch_dispatch(
+raft::raft_cuda_error_t pairwise_matrix_arch_dispatch(
   ops::kl_divergence_op<DataT, AccT, IdxT> distance_op,
   pairwise_matrix_dispatch_params<DataT, AccT, OutT, FinOpT, IdxT> params)
 {
-  pairwise_matrix_dispatch_any_to_sm60(distance_op, params);
+  return pairwise_matrix_dispatch_any_to_sm60(distance_op, params);
 }
 
 template <typename DataT, typename AccT, typename OutT, typename FinOpT, typename IdxT>
-void pairwise_matrix_arch_dispatch(
+raft::raft_cuda_error_t pairwise_matrix_arch_dispatch(
   ops::l1_distance_op<DataT, AccT, IdxT> distance_op,
   pairwise_matrix_dispatch_params<DataT, AccT, OutT, FinOpT, IdxT> params)
 {
-  pairwise_matrix_dispatch_any_to_sm60(distance_op, params);
+  return pairwise_matrix_dispatch_any_to_sm60(distance_op, params);
 }
 
 template <typename DataT, typename AccT, typename OutT, typename FinOpT, typename IdxT>
-void pairwise_matrix_arch_dispatch(
+raft::raft_cuda_error_t pairwise_matrix_arch_dispatch(
   ops::l2_exp_distance_op<DataT, AccT, IdxT> distance_op,
   pairwise_matrix_dispatch_params<DataT, AccT, OutT, FinOpT, IdxT> params)
 {
-  pairwise_matrix_dispatch_split_at_sm80(distance_op, params);
+  return pairwise_matrix_dispatch_split_at_sm80(distance_op, params);
 }
 
 template <typename DataT, typename AccT, typename OutT, typename FinOpT, typename IdxT>
-void pairwise_matrix_arch_dispatch(
+raft::raft_cuda_error_t pairwise_matrix_arch_dispatch(
   ops::l2_unexp_distance_op<DataT, AccT, IdxT> distance_op,
   pairwise_matrix_dispatch_params<DataT, AccT, OutT, FinOpT, IdxT> params)
 {
-  pairwise_matrix_dispatch_any_to_sm60(distance_op, params);
+  return pairwise_matrix_dispatch_any_to_sm60(distance_op, params);
 }
 
 template <typename DataT, typename AccT, typename OutT, typename FinOpT, typename IdxT>
-void pairwise_matrix_arch_dispatch(
+raft::raft_cuda_error_t pairwise_matrix_arch_dispatch(
   ops::l_inf_distance_op<DataT, AccT, IdxT> distance_op,
   pairwise_matrix_dispatch_params<DataT, AccT, OutT, FinOpT, IdxT> params)
 {
-  pairwise_matrix_dispatch_any_to_sm60(distance_op, params);
+  return pairwise_matrix_dispatch_any_to_sm60(distance_op, params);
 }
 
 template <typename DataT, typename AccT, typename OutT, typename FinOpT, typename IdxT>
-void pairwise_matrix_arch_dispatch(
+raft::raft_cuda_error_t pairwise_matrix_arch_dispatch(
   ops::lp_unexp_distance_op<DataT, AccT, IdxT> distance_op,
   pairwise_matrix_dispatch_params<DataT, AccT, OutT, FinOpT, IdxT> params)
 {
-  pairwise_matrix_dispatch_any_to_sm60(distance_op, params);
+  return pairwise_matrix_dispatch_any_to_sm60(distance_op, params);
 }
 
 template <typename DataT, typename AccT, typename OutT, typename FinOpT, typename IdxT>
-void pairwise_matrix_arch_dispatch(
+raft::raft_cuda_error_t pairwise_matrix_arch_dispatch(
   ops::russel_rao_distance_op<DataT, AccT, IdxT> distance_op,
   pairwise_matrix_dispatch_params<DataT, AccT, OutT, FinOpT, IdxT> params)
 {
-  pairwise_matrix_dispatch_any_to_sm60(distance_op, params);
+  return pairwise_matrix_dispatch_any_to_sm60(distance_op, params);
 }
 
 }  // namespace raft::distance::detail

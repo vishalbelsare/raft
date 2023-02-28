@@ -61,20 +61,20 @@ template <typename DataT,
           typename FinalLambda,
           typename DistanceFn,
           bool isRowMajor>
-void cutlassDistanceKernel(const DataT* x,
-                           const DataT* y,
-                           const DataT* xn,
-                           const DataT* yn,
-                           IdxT m,
-                           IdxT n,
-                           IdxT k,
-                           IdxT lda,
-                           IdxT ldb,
-                           IdxT ldd,
-                           OutT* dOutput,
-                           FinalLambda fin_op,
-                           DistanceFn dist_op,
-                           cudaStream_t stream)
+raft::raft_cuda_error_t cutlassDistanceKernel(const DataT* x,
+                                              const DataT* y,
+                                              const DataT* xn,
+                                              const DataT* yn,
+                                              IdxT m,
+                                              IdxT n,
+                                              IdxT k,
+                                              IdxT lda,
+                                              IdxT ldb,
+                                              IdxT ldd,
+                                              OutT* dOutput,
+                                              FinalLambda fin_op,
+                                              DistanceFn dist_op,
+                                              cudaStream_t stream)
 {
   static_assert(!(std::is_same<OutT, bool>::value),
                 "OutType bool is not supported use uint8_t instead");
@@ -167,6 +167,8 @@ void cutlassDistanceKernel(const DataT* x,
   // Launch initialized CUTLASS kernel
   status = cutlassDist_op();
   CUTLASS_CHECK(status);
+
+  return raft::raft_success();
 }
 
 };  // namespace detail

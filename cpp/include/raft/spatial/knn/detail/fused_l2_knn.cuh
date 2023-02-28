@@ -606,8 +606,9 @@ void fusedL2UnexpKnnImpl(const DataT* x,
     }
 
     const auto sharedMemSize = KPolicy::SmemSize + (KPolicy::Mblk * numOfNN * sizeof(Pair));
-    dim3 grid                = raft::distance::detail::launchConfigGenerator<KPolicy>(
-      m, n, sharedMemSize, fusedL2UnexpKnnRowMajor);
+    dim3 grid;
+    RAFT_CUDA_TRY(raft::distance::detail::launchConfigGenerator<KPolicy>(
+      m, n, sharedMemSize, fusedL2UnexpKnnRowMajor, grid));
 
     if (grid.x > 1) {
       const auto numMutexes = raft::ceildiv<int>(m, KPolicy::Mblk);
@@ -797,8 +798,9 @@ void fusedL2ExpKnnImpl(const DataT* x,
     const auto sharedMemSize = KPolicy::SmemSize +
                                ((KPolicy::Mblk + KPolicy::Nblk) * sizeof(DataT)) +
                                (KPolicy::Mblk * numOfNN * sizeof(Pair));
-    dim3 grid = raft::distance::detail::launchConfigGenerator<KPolicy>(
-      m, n, sharedMemSize, fusedL2ExpKnnRowMajor);
+    dim3 grid;
+    RAFT_CUDA_TRY(raft::distance::detail::launchConfigGenerator<KPolicy>(
+      m, n, sharedMemSize, fusedL2ExpKnnRowMajor, grid));
     int32_t* mutexes = nullptr;
     if (grid.x > 1) {
       const auto numMutexes   = raft::ceildiv<int>(m, KPolicy::Mblk);

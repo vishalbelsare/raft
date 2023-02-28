@@ -16,8 +16,8 @@
 #pragma once
 #include <raft/core/operators.hpp>
 #include <raft/linalg/contractions.cuh>
-#include <raft/util/cuda_utils.cuh>
-#include <raft/util/cudart_utils.hpp>
+#include <raft/util/cuda_dev_essentials.cuh>
+#include <raft/util/cuda_rt_essentials.hpp>
 
 #include <cstddef>
 
@@ -270,14 +270,20 @@ struct PairwiseDistances : public BaseClass {
 };  // struct PairwiseDistances
 
 template <typename P, typename IdxT, typename T>
-dim3 launchConfigGenerator(IdxT m, IdxT n, std::size_t sMemSize, T func)
+raft::raft_cuda_error_t launchConfigGenerator(
+  IdxT m, IdxT n, std::size_t sMemSize, T func, dim3& out_grid)
 {
-  const auto numSMs  = raft::getMultiProcessorCount();
+  int devId;
+  RAFT_CUDA_RETURN_ON_ERROR(cudaGetDevice(&devId));
+  int numSMs;
+  RAFT_CUDA_RETURN_ON_ERROR(cudaDeviceGetAttribute(&numSMs, cudaDevAttrMultiProcessorCount, devId));
+
   int numBlocksPerSm = 0;
   dim3 grid;
 
-  RAFT_CUDA_TRY(
+  RAFT_CUDA_RETURN_ON_ERROR(
     cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSm, func, P::Nthreads, sMemSize));
+
   std::size_t minGridSize = numSMs * numBlocksPerSm;
   std::size_t yChunks     = raft::ceildiv<int>(m, P::Mblk);
   std::size_t xChunks     = raft::ceildiv<int>(n, P::Nblk);
@@ -291,7 +297,9 @@ dim3 launchConfigGenerator(IdxT m, IdxT n, std::size_t sMemSize, T func)
     grid.x = i >= xChunks ? xChunks : i;
   }
 
-  return grid;
+  out_grid = grid;
+
+  return raft::raft_success();
 }
 
 };  // namespace detail

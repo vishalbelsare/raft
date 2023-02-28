@@ -27,6 +27,8 @@
 #include <raft/linalg/norm.cuh>
 #include <raft/linalg/reduce.cuh>
 #include <raft/linalg/unary_op.cuh>
+#include <raft/util/cuda_rt_essentials.hpp>
+#include <raft/util/cudart_utils.hpp>
 #include <type_traits>
 
 namespace raft {

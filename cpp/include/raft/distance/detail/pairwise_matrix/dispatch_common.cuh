@@ -63,19 +63,19 @@ using vec_len_constant = std::integral_constant<int, n>;
  *                   row_major and vec_len.
  */
 template <typename F>
-void dispatch_common(bool row_major, int vec_len, F&& f)
+auto dispatch_common(bool row_major, int vec_len, F&& f)
 {
   if (row_major) {
     switch (vec_len) {
-      case 4: f(std::bool_constant<true>(), vec_len_constant<4>()); break;
-      case 2: f(std::bool_constant<true>(), vec_len_constant<2>()); break;
-      default: f(std::bool_constant<true>(), vec_len_constant<1>()); break;
+      case 4: return f(std::bool_constant<true>(), vec_len_constant<4>());
+      case 2: return f(std::bool_constant<true>(), vec_len_constant<2>());
+      default: return f(std::bool_constant<true>(), vec_len_constant<1>());
     }
   } else {
     switch (vec_len) {
-      case 4: f(std::bool_constant<false>(), vec_len_constant<4>()); break;
-      case 2: f(std::bool_constant<false>(), vec_len_constant<2>()); break;
-      default: f(std::bool_constant<false>(), vec_len_constant<1>()); break;
+      case 4: return f(std::bool_constant<false>(), vec_len_constant<4>());
+      case 2: return f(std::bool_constant<false>(), vec_len_constant<2>());
+      default: return f(std::bool_constant<false>(), vec_len_constant<1>());
     }
   }
 }

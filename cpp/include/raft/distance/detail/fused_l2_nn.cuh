@@ -28,11 +28,6 @@ namespace distance {
 
 namespace detail {
 
-#if (ENABLE_MEMCPY_ASYNC == 1)
-#include <cuda_pipeline.h>
-using namespace nvcuda::experimental;
-#endif
-
 template <typename LabelT, typename DataT>
 struct KVPMinReduceImpl {
   typedef raft::KeyValuePair<LabelT, DataT> KVP;
@@ -310,7 +305,8 @@ void fusedL2NNImpl(OutT* min,
                                          KVPReduceOpT,
                                          decltype(core_lambda),
                                          raft::identity_op>;
-    dim3 grid          = launchConfigGenerator<P>(m, n, shmemSize, fusedL2NNSqrt);
+    dim3 grid;
+    RAFT_CUDA_TRY(launchConfigGenerator<P>(m, n, shmemSize, fusedL2NNSqrt, grid));
 
     fusedL2NNSqrt<<<grid, blk, shmemSize, stream>>>(min,
                                                     x,
@@ -336,7 +332,9 @@ void fusedL2NNImpl(OutT* min,
                                      KVPReduceOpT,
                                      decltype(core_lambda),
                                      raft::identity_op>;
-    dim3 grid      = launchConfigGenerator<P>(m, n, shmemSize, fusedL2NN);
+    dim3 grid;
+    RAFT_CUDA_TRY(launchConfigGenerator<P>(m, n, shmemSize, fusedL2NN, grid));
+
     fusedL2NN<<<grid, blk, shmemSize, stream>>>(min,
                                                 x,
                                                 y,

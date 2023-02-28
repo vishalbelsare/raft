@@ -20,6 +20,7 @@ template = """/*
 
 #include <raft/core/operators.hpp>
 #include <raft/distance/detail/distance_ops/all_ops.cuh>
+#include <raft/util/cuda_rt_essentials.hpp>
 
 #include <raft/distance/detail/pairwise_matrix/dispatch_arch.cuh>
 INCLUDE_SM_HEADERS
@@ -27,8 +28,8 @@ INCLUDE_SM_HEADERS
 
 namespace raft::distance::detail {
 
-template
-void pairwise_matrix_arch_dispatch<DataT, AccT, OutT, decltype(raft::identity_op()), IdxT>(
+template raft::raft_cuda_error_t
+pairwise_matrix_arch_dispatch<DataT, AccT, OutT, decltype(raft::identity_op()), IdxT>(
   OpT distance_op,
   pairwise_matrix_dispatch_params<DataT, AccT, OutT, decltype(raft::identity_op()), IdxT> params);
 
