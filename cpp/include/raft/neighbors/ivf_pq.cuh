@@ -16,9 +16,10 @@
 
 #pragma once
 
+#include <raft/neighbors/detail/ivf_pq_build.cuh>
+#include <raft/neighbors/detail/ivf_pq_search.cuh>
+#include <raft/neighbors/ivf_pq_serialize.cuh>
 #include <raft/neighbors/ivf_pq_types.hpp>
-#include <raft/spatial/knn/detail/ivf_pq_build.cuh>
-#include <raft/spatial/knn/detail/ivf_pq_search.cuh>
 
 #include <raft/core/device_resources.hpp>
 
@@ -71,7 +72,7 @@ auto build(raft::device_resources const& handle,
            IdxT n_rows,
            uint32_t dim) -> index<IdxT>
 {
-  return raft::spatial::knn::ivf_pq::detail::build(handle, params, dataset, n_rows, dim);
+  return detail::build(handle, params, dataset, n_rows, dim);
 }
 
 /**
@@ -141,8 +142,7 @@ auto extend(raft::device_resources const& handle,
             const IdxT* new_indices,
             IdxT n_rows) -> index<IdxT>
 {
-  return raft::spatial::knn::ivf_pq::detail::extend(
-    handle, orig_index, new_vectors, new_indices, n_rows);
+  return detail::extend(handle, orig_index, new_vectors, new_indices, n_rows);
 }
 
 /**
@@ -199,7 +199,7 @@ void extend(raft::device_resources const& handle,
             const IdxT* new_indices,
             IdxT n_rows)
 {
-  *index = extend(handle, *index, new_vectors, new_indices, n_rows);
+  detail::extend(handle, index, new_vectors, new_indices, n_rows);
 }
 
 /**
@@ -277,8 +277,7 @@ void search(raft::device_resources const& handle,
             float* distances,
             rmm::mr::device_memory_resource* mr = nullptr)
 {
-  return raft::spatial::knn::ivf_pq::detail::search(
-    handle, params, index, queries, n_queries, k, neighbors, distances, mr);
+  return detail::search(handle, params, index, queries, n_queries, k, neighbors, distances, mr);
 }
 
 /**
